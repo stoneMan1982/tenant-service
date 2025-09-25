@@ -16,13 +16,13 @@ import (
 // 配置
 const (
 	// 静态资源存储根目录，需要与Nginx配置的目录一致
-	defaultBaseUploadDir = "/app/www"
+	defaultBaseUploadDir = "./www"
 	// 允许上传的文件类型
 	allowedFileTypes = "image/jpeg,image/png,image/gif,image/webp"
 	// 最大文件大小 (5MB)
 	maxFileSize = 10 * 1024 * 1024
 	// 模板目录
-	merchantTemplateDir = "www/merchant_template"
+	merchantTemplateDir = "generate_scripts/merchant_template"
 )
 
 // 从环境变量读取配置
@@ -50,9 +50,9 @@ func main() {
 	r.GET("/merchants", listMerchants)                      // 查看所有商户列表
 	r.GET("/merchant/:merchantId/files", listMerchantFiles) // 查看特定商户的文件列表
 	// 新增商户管理相关接口
-	r.POST("/merchant/create/:merchantId", createMerchant)              // 创建商户
-	r.GET("/merchant/:merchantId/domains", getMerchantDomains)         // 获取商户domains.json
-	r.PUT("/merchant/:merchantId/domains", updateMerchantDomains)       // 更新商户domains.json
+	r.POST("/merchant/create/:merchantId", createMerchant)                // 创建商户
+	r.GET("/merchant/:merchantId/domains", getMerchantDomains)            // 获取商户domains.json
+	r.PUT("/merchant/:merchantId/domains", updateMerchantDomains)         // 更新商户domains.json
 	r.POST("/merchant/:merchantId/domains/upload", uploadMerchantDomains) // 上传商户domains.json
 
 	// 确保基础目录存在
@@ -61,7 +61,7 @@ func main() {
 	}
 
 	// 启动服务器
-	r.Run(":8080") // 监听并在 0.0.0.0:8080 上启动服务
+	r.Run(":4300")
 }
 
 // 健康检查接口
@@ -284,7 +284,7 @@ func listMerchantFiles(c *gin.Context) {
 	}
 
 	// 构建商户目录路径
-	merchantDir := filepath.Join(baseUploadDir, "merchant"+merchantId)
+	merchantDir := filepath.Join(baseUploadDir, fmt.Sprintf("merchant_%s", merchantId))
 
 	// 检查商户目录是否存在
 	if _, err := os.Stat(merchantDir); os.IsNotExist(err) {
@@ -301,30 +301,43 @@ func listMerchantFiles(c *gin.Context) {
 		return
 	}
 
-	// 读取商户目录中的文件
-	files, err := os.ReadDir(merchantDir)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "读取商户目录失败: " + err.Error(),
-		})
-		return
-	}
-
 	// 准备文件列表
 	fileList := []gin.H{}
 	fileCount := 0
-	for _, file := range files {
-		if !file.IsDir() {
-			fileInfo, _ := file.Info()
-			fileList = append(fileList, gin.H{
-				"name": file.Name(),
-				"size": fileInfo.Size(),
-				"url":  "/merchant" + merchantId + "/" + file.Name(),
-			})
-			fileCount++
+
+	// 递归遍历所有子目录中的文件
+	var traverseDir func(string, string)
+	traverseDir = func(dirPath string, urlPath string) {
+		entries, err := os.ReadDir(dirPath)
+		if err != nil {
+			return
+		}
+
+		for _, entry := range entries {
+			fullPath := filepath.Join(dirPath, entry.Name())
+			fullUrlPath := filepath.Join(urlPath, entry.Name())
+			// 规范化URL路径，确保使用正斜杠
+			fullUrlPath = strings.ReplaceAll(fullUrlPath, "\\", "/")
+
+			if entry.IsDir() {
+				// 如果是目录，递归遍历
+				traverseDir(fullPath, fullUrlPath)
+			} else {
+				// 如果是文件，添加到列表
+				fileInfo, _ := entry.Info()
+				fileList = append(fileList, gin.H{
+					"name": entry.Name(),
+					"size": fileInfo.Size(),
+					"url":  fullUrlPath,
+					"path": strings.TrimPrefix(fullPath, baseUploadDir),
+				})
+				fileCount++
+			}
 		}
 	}
+
+	// 从商户根目录开始遍历
+	traverseDir(merchantDir, "/merchant_"+merchantId)
 
 	// 返回成功响应
 	c.JSON(http.StatusOK, gin.H{
@@ -373,8 +386,7 @@ func createMerchant(c *gin.Context) {
 	}
 
 	// 检查模板目录是否存在
-	templateDir := filepath.Join(baseUploadDir, merchantTemplateDir)
-	if _, err := os.Stat(templateDir); os.IsNotExist(err) {
+	if _, err := os.Stat(merchantTemplateDir); os.IsNotExist(err) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "模板目录不存在",
@@ -397,14 +409,14 @@ func createMerchant(c *gin.Context) {
 	// 从模板复制文件并替换占位符
 	dirsToCopy := []string{"html", "data", "static"}
 	for _, dir := range dirsToCopy {
-		sourceDir := filepath.Join(templateDir, dir)
+		sourceDir := filepath.Join(merchantTemplateDir, dir)
 		destDir := filepath.Join(merchantDir, dir)
-		
+
 		// 检查源目录是否存在
 		if _, err := os.Stat(sourceDir); os.IsNotExist(err) {
 			continue
 		}
-		
+
 		// 复制目录下的文件
 		entries, err := os.ReadDir(sourceDir)
 		if err != nil {
@@ -414,11 +426,11 @@ func createMerchant(c *gin.Context) {
 			})
 			return
 		}
-		
+
 		for _, entry := range entries {
 			sourcePath := filepath.Join(sourceDir, entry.Name())
 			destPath := filepath.Join(destDir, entry.Name())
-			
+
 			if entry.IsDir() {
 				// 如果是目录，递归创建
 				if err := os.MkdirAll(destPath, 0755); err != nil {
@@ -430,7 +442,7 @@ func createMerchant(c *gin.Context) {
 				}
 			} else {
 				// 如果是文件，复制并替换占位符
-				content, err := ioutil.ReadFile(sourcePath)
+				content, err := os.ReadFile(sourcePath)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{
 						"success": false,
@@ -438,12 +450,12 @@ func createMerchant(c *gin.Context) {
 					})
 					return
 				}
-				
+
 				// 替换文件内容中的MERCHANT_ID占位符
 				newContent := strings.ReplaceAll(string(content), "MERCHANT_ID", merchantId)
-											
+
 				// 写入新文件
-				if err := ioutil.WriteFile(destPath, []byte(newContent), 0644); err != nil {
+				if err := os.WriteFile(destPath, []byte(newContent), 0644); err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{
 						"success": false,
 						"error":   "写入文件失败: " + err.Error(),
@@ -601,7 +613,7 @@ func updateMerchantDomains(c *gin.Context) {
 	}
 
 	// 写入文件
-	if err := ioutil.WriteFile(domainsFilePath, formattedJSON, 0644); err != nil {
+	if err := os.WriteFile(domainsFilePath, formattedJSON, 0644); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "写入文件失败: " + err.Error(),
@@ -714,4 +726,34 @@ func uploadMerchantDomains(c *gin.Context) {
 			"size":       file.Size,
 		},
 	})
+}
+
+func traverseDir(root os.DirEntry, prefix string) error {
+	if root.IsDir() {
+
+		entries, err := os.ReadDir(root.Name())
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+
+		for _, entry := range entries {
+			fullPath := filepath.Join(root.Name(), entry.Name())
+
+			if entry.IsDir() {
+				fmt.Printf("目录: %s\n", fullPath)
+				// 递归遍历子目录
+				traverseDir(entry, prefix)
+			} else {
+				info, _ := entry.Info()
+				fmt.Printf("文件: %s, 大小: %d bytes\n", fullPath, info.Size())
+			}
+		}
+	} else {
+		info, _ := root.Info()
+		fullPath := filepath.Join(root.Name())
+		fmt.Printf("文件: %s, 大小: %d bytes\n", fullPath, info.Size())
+		return nil
+	}
+	return nil
 }
