@@ -22,3 +22,62 @@
 - 访问 /merchant1001 自动内部重写到 /merchant_1001
 - 访问 /merchant_1001/data/test_data.json 成功返回数据文件内容
 这个方案满足了您动态添加商户的需求，只需创建符合命名规则的商户目录结构，Nginx就会自动处理相应的URL请求，无需修改配置文件。
+
+
+
+
+
+1. 1.
+   修改Nginx配置 ：
+   
+   - 添加了两个新的location块，分别处理纯数字ID和纯字符ID带路径的访问（如/1001/abc.html和/abc001/jumper.js）
+   - 在try_files指令中添加了/html目录的路径，使其能够正确查找商户目录下html子目录中的文件
+   - 确保新规则不会与现有的数据文件访问规则冲突
+2. 2.
+   功能验证 ：
+   
+   - 成功访问/1001/abc.html，返回了正确的HTML内容
+   - 成功访问/abc001/jumper.js，返回了正确的JavaScript文件内容
+   - 确认现有的数据文件访问功能（如/merchant_1001/data/test_data.json）仍然正常工作
+现在系统完全支持以下四种URL格式的商户页面和资源访问：
+
+- 格式1：带下划线的完整格式（/merchant_{id}）
+- 格式2：不带下划线的格式（/merchant{id}，仅数字ID）
+- 格式3：纯数字ID格式（/{数字ID}）
+- 格式4：纯字符ID格式（/{字符ID}）
+并且所有这些格式都支持访问根路径（如/1001）和带路径的资源（如/1001/abc.html），大大提高了系统的灵活性和用户体验。
+
+
+
+
+主要修改内容：
+
+1. 1.
+   添加了新的API接口 ：
+   
+   - POST /merchant/create/:merchantId - 创建商户
+   - GET /merchant/:merchantId/domains - 获取商户domains.json
+   - PUT /merchant/:merchantId/domains - 更新商户domains.json
+   - POST /merchant/:merchantId/domains/upload - 上传商户domains.json
+2. 2.
+   创建商户功能 ( createMerchant 函数)：
+   
+   - 验证商户ID合法性（只允许字母、数字和下划线）
+   - 检查商户是否已存在和模板目录是否存在
+   - 创建商户的目录结构（html、static、config、data）
+   - 从 www/merchant_template 模板目录复制文件
+   - 替换所有文件内容中的 MERCHANT_ID 占位符为实际商户ID
+   - 重命名index.html文件
+   - 设置目录权限
+3. 3.
+   domains.json管理功能 ：
+   
+   - getMerchantDomains ：读取并返回指定商户的domains.json内容
+   - updateMerchantDomains ：通过JSON请求体直接更新domains.json
+   - uploadMerchantDomains ：上传新的JSON文件作为domains.json，并验证文件格式
+4. 4.
+   代码优化 ：
+   
+   - 添加了适当的错误处理和响应
+   - 修复了上传JSON文件时的拼写错误
+   - 代码通过 go build 编译检查，确保语法正确

@@ -1,9 +1,13 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -17,6 +21,8 @@ const (
 	allowedFileTypes = "image/jpeg,image/png,image/gif,image/webp"
 	// 最大文件大小 (5MB)
 	maxFileSize = 10 * 1024 * 1024
+	// 模板目录
+	merchantTemplateDir = "www/merchant_template"
 )
 
 // 从环境变量读取配置
@@ -43,6 +49,11 @@ func main() {
 	r.GET("/health", healthCheck)
 	r.GET("/merchants", listMerchants)                      // 查看所有商户列表
 	r.GET("/merchant/:merchantId/files", listMerchantFiles) // 查看特定商户的文件列表
+	// 新增商户管理相关接口
+	r.POST("/merchant/create/:merchantId", createMerchant)              // 创建商户
+	r.GET("/merchant/:merchantId/domains", getMerchantDomains)         // 获取商户domains.json
+	r.PUT("/merchant/:merchantId/domains", updateMerchantDomains)       // 更新商户domains.json
+	r.POST("/merchant/:merchantId/domains/upload", uploadMerchantDomains) // 上传商户domains.json
 
 	// 确保基础目录存在
 	if err := os.MkdirAll(baseUploadDir, 0755); err != nil {
@@ -323,6 +334,384 @@ func listMerchantFiles(c *gin.Context) {
 			"merchantId": merchantId,
 			"fileCount":  fileCount,
 			"files":      fileList,
+		},
+	})
+}
+
+// 创建商户
+func createMerchant(c *gin.Context) {
+	// 获取商户ID
+	merchantId := c.Param("merchantId")
+	if merchantId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "商户ID不能为空",
+		})
+		return
+	}
+
+	// 验证商户ID合法性
+	validMerchantId := regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+	if !validMerchantId.MatchString(merchantId) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "商户ID仅支持字母、数字、下划线，不允许特殊字符",
+		})
+		return
+	}
+
+	// 构建商户目录路径
+	merchantDir := filepath.Join(baseUploadDir, "merchant_"+merchantId)
+
+	// 检查商户是否已存在
+	if _, err := os.Stat(merchantDir); !os.IsNotExist(err) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "商户已存在",
+		})
+		return
+	}
+
+	// 检查模板目录是否存在
+	templateDir := filepath.Join(baseUploadDir, merchantTemplateDir)
+	if _, err := os.Stat(templateDir); os.IsNotExist(err) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "模板目录不存在",
+		})
+		return
+	}
+
+	// 创建商户子目录
+	for _, subdir := range []string{"html", "static", "config", "data"} {
+		subdirPath := filepath.Join(merchantDir, subdir)
+		if err := os.MkdirAll(subdirPath, 0755); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "创建" + subdir + "目录失败: " + err.Error(),
+			})
+			return
+		}
+	}
+
+	// 从模板复制文件并替换占位符
+	dirsToCopy := []string{"html", "data", "static"}
+	for _, dir := range dirsToCopy {
+		sourceDir := filepath.Join(templateDir, dir)
+		destDir := filepath.Join(merchantDir, dir)
+		
+		// 检查源目录是否存在
+		if _, err := os.Stat(sourceDir); os.IsNotExist(err) {
+			continue
+		}
+		
+		// 复制目录下的文件
+		entries, err := os.ReadDir(sourceDir)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "读取模板" + dir + "目录失败: " + err.Error(),
+			})
+			return
+		}
+		
+		for _, entry := range entries {
+			sourcePath := filepath.Join(sourceDir, entry.Name())
+			destPath := filepath.Join(destDir, entry.Name())
+			
+			if entry.IsDir() {
+				// 如果是目录，递归创建
+				if err := os.MkdirAll(destPath, 0755); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"success": false,
+						"error":   "创建目录失败: " + err.Error(),
+					})
+					return
+				}
+			} else {
+				// 如果是文件，复制并替换占位符
+				content, err := ioutil.ReadFile(sourcePath)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"success": false,
+						"error":   "读取模板文件失败: " + err.Error(),
+					})
+					return
+				}
+				
+				// 替换文件内容中的MERCHANT_ID占位符
+				newContent := strings.ReplaceAll(string(content), "MERCHANT_ID", merchantId)
+											
+				// 写入新文件
+				if err := ioutil.WriteFile(destPath, []byte(newContent), 0644); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"success": false,
+						"error":   "写入文件失败: " + err.Error(),
+					})
+					return
+				}
+			}
+		}
+	}
+
+	// 重命名index.html文件
+	templateIndexFile := filepath.Join(merchantDir, "html", "merchant_MERCHANT_ID_index.html")
+	newIndexFile := filepath.Join(merchantDir, "html", "merchant_"+merchantId+"_index.html")
+	if _, err := os.Stat(templateIndexFile); err == nil {
+		if err := os.Rename(templateIndexFile, newIndexFile); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "重命名index.html文件失败: " + err.Error(),
+			})
+			return
+		}
+	}
+
+	// 设置权限
+	if err := os.Chmod(merchantDir, 0755); err != nil {
+		// 权限设置失败不影响商户创建成功，但会给出警告
+		fmt.Printf("警告: 设置商户目录权限失败: %v\n", err)
+	}
+
+	// 返回成功响应
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "商户创建成功",
+		"data": gin.H{
+			"merchantId": merchantId,
+			"directory":  "merchant_" + merchantId,
+			"url":        "/merchant_" + merchantId + "/html/merchant_" + merchantId + "_index.html",
+		},
+	})
+}
+
+// 获取商户domains.json
+func getMerchantDomains(c *gin.Context) {
+	// 获取商户ID
+	merchantId := c.Param("merchantId")
+	if merchantId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "商户ID不能为空",
+		})
+		return
+	}
+
+	// 构建domains.json文件路径
+	domainsFilePath := filepath.Join(baseUploadDir, "merchant_"+merchantId, "data", "domains.json")
+
+	// 检查文件是否存在
+	if _, err := os.Stat(domainsFilePath); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "domains.json文件不存在",
+		})
+		return
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "检查文件失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 读取文件内容
+	content, err := ioutil.ReadFile(domainsFilePath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "读取文件失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 解析JSON
+	var domainsJSON map[string]interface{}
+	if err := json.Unmarshal(content, &domainsJSON); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "解析JSON失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 返回成功响应
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "获取domains.json成功",
+		"data":    domainsJSON,
+	})
+}
+
+// 更新商户domains.json
+func updateMerchantDomains(c *gin.Context) {
+	// 获取商户ID
+	merchantId := c.Param("merchantId")
+	if merchantId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "商户ID不能为空",
+		})
+		return
+	}
+
+	// 构建domains.json文件路径
+	domainsFilePath := filepath.Join(baseUploadDir, "merchant_"+merchantId, "data", "domains.json")
+
+	// 检查商户目录是否存在
+	merchantDir := filepath.Join(baseUploadDir, "merchant_"+merchantId)
+	if _, err := os.Stat(merchantDir); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "商户不存在",
+		})
+		return
+	}
+
+	// 确保data目录存在
+	dataDir := filepath.Join(merchantDir, "data")
+	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "创建data目录失败: " + err.Error(),
+			})
+			return
+		}
+	}
+
+	// 解析请求体中的JSON
+	var domainsJSON map[string]interface{}
+	if err := c.BindJSON(&domainsJSON); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "解析请求体失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 格式化JSON
+	formattedJSON, err := json.MarshalIndent(domainsJSON, "", "  ")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "格式化JSON失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 写入文件
+	if err := ioutil.WriteFile(domainsFilePath, formattedJSON, 0644); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "写入文件失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 返回成功响应
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "更新domains.json成功",
+		"data":    domainsJSON,
+	})
+}
+
+// 上传商户domains.json
+func uploadMerchantDomains(c *gin.Context) {
+	// 获取商户ID
+	merchantId := c.Param("merchantId")
+	if merchantId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "商户ID不能为空",
+		})
+		return
+	}
+
+	// 构建domains.json文件路径
+	domainsFilePath := filepath.Join(baseUploadDir, "merchant_"+merchantId, "data", "domains.json")
+
+	// 检查商户目录是否存在
+	merchantDir := filepath.Join(baseUploadDir, "merchant_"+merchantId)
+	if _, err := os.Stat(merchantDir); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "商户不存在",
+		})
+		return
+	}
+
+	// 确保data目录存在
+	dataDir := filepath.Join(merchantDir, "data")
+	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "创建data目录失败: " + err.Error(),
+			})
+			return
+		}
+	}
+
+	// 单文件
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "获取文件失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 检查文件类型（只允许JSON文件）
+	contentType := file.Header.Get("Content-Type")
+	if contentType != "application/json" && !strings.HasSuffix(file.Filename, ".json") {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "只允许上传JSON文件",
+		})
+		return
+	}
+
+	// 保存文件
+	if err := c.SaveUploadedFile(file, domainsFilePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "保存文件失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 验证JSON文件格式
+	content, err := ioutil.ReadFile(domainsFilePath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "验证文件失败: " + err.Error(),
+		})
+		return
+	}
+
+	var domainsJSON map[string]interface{}
+	if err := json.Unmarshal(content, &domainsJSON); err != nil {
+		// 如果JSON格式无效，删除文件并返回错误
+		os.Remove(domainsFilePath)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "JSON格式无效: " + err.Error(),
+		})
+		return
+	}
+
+	// 返回成功响应
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "上传domains.json成功",
+		"data": gin.H{
+			"merchantId": merchantId,
+			"filename":   "domains.json",
+			"size":       file.Size,
 		},
 	})
 }

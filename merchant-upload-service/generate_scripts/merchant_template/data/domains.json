@@ -1,0 +1,40 @@
+{
+  "startDomain": "http://test1.localhost:8080/MERCHANT_ID",
+  "domainPools": [
+    {
+      "name": "pool1",
+      "type": "intermediate",
+      "domains": [
+        "http://13dses.localhost:8080/MERCHANT_ID",
+        "http://adeok13.localhost:8080/MERCHANT_ID",
+        "http://32fdaa.localhost:8080/MERCHANT_ID",
+        "http://p32fd.localhost:8080/MERCHANT_ID",
+        "http://udfds.localhost:8080/MERCHANT_ID"
+      ]
+    },
+    {
+      "name": "pool2",
+      "type": "intermediate",
+      "domains": [
+        "http://p2dfds.localhost:8080/MERCHANT_ID",
+        "http://pfday3.localhost:8080/MERCHANT_ID",
+        "http://pfdafe2.localhost:8080/MERCHANT_ID",
+        "http://p3fdfe.localhost:8080/MERCHANT_ID",
+        "http://aa3345.localhost:8080/MERCHANT_ID"
+      ]
+    },
+    {
+      "name": "pool3_target",
+      "type": "target",
+      "domains": [
+        "http://p3afdaf.localhost:8080/MERCHANT_ID/business.html",
+        "http://faffea.localhost:8080/MERCHANT_ID/business.html",
+        "http://fdafa.localhost:8080/MERCHANT_ID/business.html",
+        "http://8fdaa.localhost:8080/MERCHANT_ID/business.html",
+        "http://9fdafa.localhost:8080/MERCHANT_ID/business.html"
+      ]
+    }
+  ],
+  "timeoutMs": 1000,
+  "jumpDelayMs": 500
+}
