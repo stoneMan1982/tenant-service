@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>域名跳转系统</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #007cba;
+            background-color: #e7f3ff;
+        }
+        .progress {
+            background-color: #e0e0e0;
+            border-radius: 25px;
+            padding: 3px;
+            margin: 20px 0;
+        }
+        .progress-bar {
+            background-color: #007cba;
+            height: 20px;
+            border-radius: 20px;
+            width: 0%;
+            transition: width 0.3s ease;
+            text-align: center;
+            line-height: 20px;
+            color: white;
+            font-size: 12px;
+        }
+        .error {
+            border-left-color: #d32f2f;
+            background-color: #ffeaea;
+            color: #d32f2f;
+        }
+        .success {
+            border-left-color: #388e3c;
+            background-color: #eafaf1;
+            color: #388e3c;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #007cba;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .domain-list {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+        .domain-item {
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .domain-item:last-child {
+            border-bottom: none;
+        }
+        .available { color: #388e3c; }
+        .unavailable { color: #d32f2f; }
+        .testing { color: #ff9800; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>域名跳转系统</h1>
+        <div id="status" class="status">
+            <div class="loading"></div>
+            正在初始化系统...
+        </div>
+        <div class="progress">
+            <div id="progressBar" class="progress-bar">0%</div>
+        </div>
+        <div id="details"></div>
+    </div>
+
+    <script src="/static/jumper.js"></script>
+</body>
+</html>

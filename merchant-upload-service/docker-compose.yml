@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    pull_policy: missing
+    container_name: merchant-nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro          # Nginx配置文件目录
+      - ./www:/var/www                            # 商户网站文件目录
+      - ./scripts:/scripts                        # 脚本目录
+    restart: unless-stopped
+    networks:
+      - merchant-network
+
+#   upload-service:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile
+#     volumes:
+#       - ./www:/app/www
+#     ports:
+#       - "8089:8080"
+#     restart: always
+#     networks:
+#       - merchant-network
+#     environment:
+#       - BASE_UPLOAD_DIR=/app/www  # 文件上传基础目录
+
+networks:
+  merchant-network:
+    driver: bridge
+    

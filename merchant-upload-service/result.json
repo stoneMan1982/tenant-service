@@ -1,0 +1,19 @@
+{
+  "success": true,
+  "message": "获取商户列表成功",
+  "data": [
+    {
+      "merchantId": "商户ID",
+      "directory": "merchant商户ID",
+      "files": [
+        {
+          "name": "文件名",
+          "size": 1,
+          "url": "/merchant商户ID/文件名"
+        }
+      ],
+      "fileCount": 12
+    }
+  ],
+  "total": 30
+}

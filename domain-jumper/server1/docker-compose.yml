@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  nginx-local:
+    image: nginx:alpine
+    pull_policy: missing
+    container_name: domain-jumper-local1
+    ports:
+      - "8001:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./static:/usr/share/nginx/html/static:ro
+      - ./config:/usr/share/nginx/html/config:ro
+      - ./data:/usr/share/nginx/html/data:ro
+      - nginx_logs_local:/var/log/nginx
+    restart: unless-stopped
+    networks:
+      - domain-jumper-local-network
+    # 添加一些有用的环境变量
+
+
+volumes:
+  nginx_logs_local:
+
+networks:
+  domain-jumper-local-network:
+    driver: bridge
