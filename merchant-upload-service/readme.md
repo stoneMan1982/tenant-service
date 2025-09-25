@@ -81,3 +81,34 @@
    - 添加了适当的错误处理和响应
    - 修复了上传JSON文件时的拼写错误
    - 代码通过 go build 编译检查，确保语法正确
+
+
+   - 1.
+修改nginx.conf配置文件
+
+- 在保留现有HTTP功能的基础上，添加了完整的HTTPS服务器配置块
+- 配置了SSL证书路径、TLS协议设置和安全优化配置
+- 确保HTTPS配置包含与HTTP相同的商户路径处理规则
+- 修复了静态资源路径配置问题，使CSS等文件能够正确加载
+- 2.
+修改docker-compose.yml文件
+
+- 添加了443端口映射（8443:443）
+- 添加了SSL证书目录挂载（./ssl:/etc/nginx/ssl:ro）
+- 3.
+创建SSL证书
+
+- 创建了ssl目录
+- 生成了自签名证书（fullchain.pem和privkey.pem）用于测试
+- 4.
+创建测试文件和目录
+
+- 创建了www/merchant_1000/html和www/merchant_1000/static目录
+- 创建了HTML测试页面和CSS样式文件
+- 5.
+功能测试
+
+- ✅ 验证了HTTPS连接可以正常建立
+- ✅ 验证了健康检查接口可以通过HTTPS访问
+- ✅ 验证了HTML页面可以通过HTTPS访问
+- ✅ 验证了静态资源（CSS文件）可以通过HTTPS访问
