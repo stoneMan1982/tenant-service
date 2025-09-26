@@ -49,17 +49,17 @@ func main() {
 	r.Static("/admin", "./admin_frontend")
 
 	// 定义路由
-r.POST("/upload/:merchantId", uploadFile)
-r.GET("/health", healthCheck)
-r.GET("/merchants", listMerchants)                      // 查看所有商户列表
-r.GET("/merchant/:merchantId/files", listMerchantFiles) // 查看特定商户的文件列表
-r.GET("/merchant/:merchantId/file", getFileContent)     // 查看特定文件的内容
-// 新增商户管理相关接口
-r.POST("/merchant/create/:merchantId", createMerchant)                  // 创建商户
-r.GET("/merchant/:merchantId/domains", getMerchantDomains)              // 获取商户domains.json
-r.PUT("/merchant/:merchantId/domains", updateMerchantDomains)           // 更新商户domains.json
-r.POST("/merchant/:merchantId/domains/upload", uploadMerchantDomains)   // 上传商户domains.json
-r.PUT("/merchant/:merchantId/domain-port", updateMerchantDomainAndPort) // 更新商户域名和端口
+	r.POST("/upload/:merchantId", uploadFile)
+	r.GET("/health", healthCheck)
+	r.GET("/merchants", listMerchants)                      // 查看所有商户列表
+	r.GET("/merchant/:merchantId/files", listMerchantFiles) // 查看特定商户的文件列表
+	r.GET("/merchant/:merchantId/file", getFileContent)     // 查看特定文件的内容
+	// 新增商户管理相关接口
+	r.POST("/merchant/create/:merchantId", createMerchant)                  // 创建商户
+	r.GET("/merchant/:merchantId/domains", getMerchantDomains)              // 获取商户domains.json
+	r.PUT("/merchant/:merchantId/domains", updateMerchantDomains)           // 更新商户domains.json
+	r.POST("/merchant/:merchantId/domains/upload", uploadMerchantDomains)   // 上传商户domains.json
+	r.PUT("/merchant/:merchantId/domain-port", updateMerchantDomainAndPort) // 更新商户域名和端口
 
 	// 确保基础目录存在
 	if err := os.MkdirAll(baseUploadDir, 0755); err != nil {
@@ -826,7 +826,6 @@ func updateMerchantDomainAndPort(c *gin.Context) {
 		newContent := strings.ReplaceAll(originalContent, "localhost", domain)
 		newContent = strings.ReplaceAll(newContent, "8080", port)
 		newContent = strings.ReplaceAll(newContent, "http://", protocol+":/")
-		newContent = strings.ReplaceAll(newContent, "16.163.193.74", domain)
 
 		// 如果内容有变化，写入新文件
 		if newContent != originalContent {
@@ -857,17 +856,17 @@ func updateMerchantDomainAndPort(c *gin.Context) {
 	}
 
 	// 返回成功响应
-c.JSON(http.StatusOK, gin.H{
-	"success": true,
-	"message": "商户域名和端口更新成功",
-	"data": gin.H{
-		"merchantId":     merchantId,
-		"domain":         domain,
-		"port":           port,
-		"protocol":       protocol,
-		"filesProcessed": filesProcessed,
-	},
-})
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "商户域名和端口更新成功",
+		"data": gin.H{
+			"merchantId":     merchantId,
+			"domain":         domain,
+			"port":           port,
+			"protocol":       protocol,
+			"filesProcessed": filesProcessed,
+		},
+	})
 }
 
 // 获取文件内容
@@ -917,9 +916,9 @@ func getFileContent(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	fmt.Printf("[DEBUG] First decoded path: %s\n", firstDecodedPath)
-	
+
 	// 第二次解码
 	decodedPath, err := url.QueryUnescape(firstDecodedPath)
 	if err != nil {
@@ -929,7 +928,7 @@ func getFileContent(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	fmt.Printf("[DEBUG] Final decoded path: %s\n", decodedPath)
 
 	// 为了安全起见，检查path是否包含了商户ID对应的目录

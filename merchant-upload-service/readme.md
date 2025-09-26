@@ -112,3 +112,44 @@
 - ✅ 验证了健康检查接口可以通过HTTPS访问
 - ✅ 验证了HTML页面可以通过HTTPS访问
 - ✅ 验证了静态资源（CSS文件）可以通过HTTPS访问
+
+
+## 1. Nginx主配置文件更新
+在 merchant-upload-service/nginx/nginx.conf 中添加了以下功能：
+
+- 增强了主日志格式的注释说明
+- 添加了专门的 merchant 日志格式，包含商户ID识别
+- 配置了错误日志记录到 /var/log/nginx/error.log
+- 添加了慢速请求日志配置，自动记录响应时间超过1秒的请求
+- 为所有商户相关的location块添加了商户ID提取和特定日志记录
+- 为上传服务代理配置添加了日志注释示例
+## 2. 日志轮转配置
+创建了 merchant-upload-service/nginx/logrotate.conf 文件，配置了自动日志轮转策略：
+
+- 每天自动轮转一次
+- 保留14天的历史日志
+- 旧日志会自动压缩
+- 轮转后自动通知Nginx重新打开日志文件
+## 3. 使用说明文档
+创建了 merchant-upload-service/nginx/README_LOG.md 文档，详细说明了：
+
+- 日志文件结构和各日志文件的用途
+- 不同日志格式的详细字段说明
+- 日志轮转配置详情
+- 查看和分析日志的常用命令
+- 日志分析建议和注意事项
+## 4. 验证和应用脚本
+创建了 merchant-upload-service/nginx/verify_log_config.sh 脚本并设置了执行权限，该脚本可以：
+
+- 检查并创建日志目录，设置正确的权限
+- 验证Nginx配置的正确性
+- 重启Nginx服务以应用变更
+- 配置logrotate策略
+- 提供常用日志查看命令的参考
+## 使用方法
+您可以运行以下命令来验证和应用日志配置变更：
+
+```
+sudo merchant-upload-service/nginx/verify_log_config.sh
+```
+通过这些配置，您现在可以更有效地监控、分析和管理商户服务的访问日志，特别是可以根据商户ID进行访问行为分析和问题排查。
