@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -44,16 +45,21 @@ func main() {
 	// 配置上传大小限制
 	r.MaxMultipartMemory = maxFileSize
 
+	// 添加admin_frontend目录的静态文件服务
+	r.Static("/admin", "./admin_frontend")
+
 	// 定义路由
-	r.POST("/upload/:merchantId", uploadFile)
-	r.GET("/health", healthCheck)
-	r.GET("/merchants", listMerchants)                      // 查看所有商户列表
-	r.GET("/merchant/:merchantId/files", listMerchantFiles) // 查看特定商户的文件列表
-	// 新增商户管理相关接口
-	r.POST("/merchant/create/:merchantId", createMerchant)                // 创建商户
-	r.GET("/merchant/:merchantId/domains", getMerchantDomains)            // 获取商户domains.json
-	r.PUT("/merchant/:merchantId/domains", updateMerchantDomains)         // 更新商户domains.json
-	r.POST("/merchant/:merchantId/domains/upload", uploadMerchantDomains) // 上传商户domains.json
+r.POST("/upload/:merchantId", uploadFile)
+r.GET("/health", healthCheck)
+r.GET("/merchants", listMerchants)                      // 查看所有商户列表
+r.GET("/merchant/:merchantId/files", listMerchantFiles) // 查看特定商户的文件列表
+r.GET("/merchant/:merchantId/file", getFileContent)     // 查看特定文件的内容
+// 新增商户管理相关接口
+r.POST("/merchant/create/:merchantId", createMerchant)                  // 创建商户
+r.GET("/merchant/:merchantId/domains", getMerchantDomains)              // 获取商户domains.json
+r.PUT("/merchant/:merchantId/domains", updateMerchantDomains)           // 更新商户domains.json
+r.POST("/merchant/:merchantId/domains/upload", uploadMerchantDomains)   // 上传商户domains.json
+r.PUT("/merchant/:merchantId/domain-port", updateMerchantDomainAndPort) // 更新商户域名和端口
 
 	// 确保基础目录存在
 	if err := os.MkdirAll(baseUploadDir, 0755); err != nil {
@@ -85,7 +91,7 @@ func uploadFile(c *gin.Context) {
 	}
 
 	// 创建商户专属目录
-	merchantDir := filepath.Join(baseUploadDir, "merchant"+merchantId)
+	merchantDir := filepath.Join(baseUploadDir, "merchant_"+merchantId)
 	if err := os.MkdirAll(merchantDir, 0755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -251,8 +257,8 @@ func listMerchants(c *gin.Context) {
 
 	// 遍历所有目录，找出商户目录
 	for _, entry := range entries {
-		if entry.IsDir() && strings.HasPrefix(entry.Name(), "merchant") {
-			merchantId := strings.TrimPrefix(entry.Name(), "merchant")
+		if entry.IsDir() && strings.HasPrefix(entry.Name(), "merchant_") {
+			merchantId := strings.TrimPrefix(entry.Name(), "merchant_")
 
 			// 添加商户信息到响应
 			merchants = append(merchants, gin.H{
@@ -363,6 +369,11 @@ func createMerchant(c *gin.Context) {
 		return
 	}
 
+	// 获取域名和端口参数
+	domain := c.DefaultQuery("domain", "localhost")
+	port := c.DefaultQuery("port", "8080")
+	protocol := "https"
+
 	// 验证商户ID合法性
 	validMerchantId := regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 	if !validMerchantId.MatchString(merchantId) {
@@ -453,6 +464,14 @@ func createMerchant(c *gin.Context) {
 
 				// 替换文件内容中的MERCHANT_ID占位符
 				newContent := strings.ReplaceAll(string(content), "MERCHANT_ID", merchantId)
+				// 替换localhost为域名
+				newContent = strings.ReplaceAll(newContent, "localhost", domain)
+				// 替换8080为端口
+				newContent = strings.ReplaceAll(newContent, "8080", port)
+				// 替换http为https
+				newContent = strings.ReplaceAll(newContent, "http://", protocol+":/")
+				// 替换硬编码的IP地址
+				newContent = strings.ReplaceAll(newContent, "16.163.193.74", domain)
 
 				// 写入新文件
 				if err := os.WriteFile(destPath, []byte(newContent), 0644); err != nil {
@@ -492,7 +511,9 @@ func createMerchant(c *gin.Context) {
 		"data": gin.H{
 			"merchantId": merchantId,
 			"directory":  "merchant_" + merchantId,
-			"url":        "/merchant_" + merchantId + "/html/merchant_" + merchantId + "_index.html",
+			"url":        protocol + "://" + domain + ":" + port + "/merchant_" + merchantId + "/html/merchant_" + merchantId + "_index.html",
+			"domain":     domain,
+			"port":       port,
 		},
 	})
 }
@@ -728,32 +749,286 @@ func uploadMerchantDomains(c *gin.Context) {
 	})
 }
 
-func traverseDir(root os.DirEntry, prefix string) error {
-	if root.IsDir() {
+// 更新商户域名和端口设置
+func updateMerchantDomainAndPort(c *gin.Context) {
+	// 获取商户ID
+	merchantId := c.Param("merchantId")
+	if merchantId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "商户ID不能为空",
+		})
+		return
+	}
 
-		entries, err := os.ReadDir(root.Name())
+	// 获取新的域名和端口
+	domain := c.DefaultQuery("domain", "")
+	port := c.DefaultQuery("port", "")
+	protocol := "https"
+
+	// 验证参数
+	if domain == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "域名不能为空",
+		})
+		return
+	}
+
+	if port == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "端口不能为空",
+		})
+		return
+	}
+
+	// 构建商户目录路径
+	merchantDir := filepath.Join(baseUploadDir, "merchant_"+merchantId)
+
+	// 检查商户是否存在
+	if _, err := os.Stat(merchantDir); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "商户不存在",
+		})
+		return
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "检查商户目录失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 替换文件中的域名和端口
+	filesProcessed := 0
+	err := filepath.Walk(merchantDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			fmt.Println(err)
 			return err
 		}
 
-		for _, entry := range entries {
-			fullPath := filepath.Join(root.Name(), entry.Name())
-
-			if entry.IsDir() {
-				fmt.Printf("目录: %s\n", fullPath)
-				// 递归遍历子目录
-				traverseDir(entry, prefix)
-			} else {
-				info, _ := entry.Info()
-				fmt.Printf("文件: %s, 大小: %d bytes\n", fullPath, info.Size())
-			}
+		// 只处理文件
+		if info.IsDir() {
+			return nil
 		}
-	} else {
-		info, _ := root.Info()
-		fullPath := filepath.Join(root.Name())
-		fmt.Printf("文件: %s, 大小: %d bytes\n", fullPath, info.Size())
+
+		// 读取文件内容
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("读取文件 %s 失败: %w", path, err)
+		}
+
+		// 保存原始内容，用于检查是否需要更新
+		originalContent := string(content)
+
+		// 替换占位符
+		newContent := strings.ReplaceAll(originalContent, "localhost", domain)
+		newContent = strings.ReplaceAll(newContent, "8080", port)
+		newContent = strings.ReplaceAll(newContent, "http://", protocol+":/")
+		newContent = strings.ReplaceAll(newContent, "16.163.193.74", domain)
+
+		// 如果内容有变化，写入新文件
+		if newContent != originalContent {
+			// 创建备份文件
+			backupPath := path + ".bak"
+			if err := os.WriteFile(backupPath, content, 0644); err != nil {
+				return fmt.Errorf("创建备份文件 %s 失败: %w", backupPath, err)
+			}
+
+			// 写入新内容
+			if err := os.WriteFile(path, []byte(newContent), 0644); err != nil {
+				return fmt.Errorf("写入文件 %s 失败: %w", path, err)
+			}
+
+			filesProcessed++
+		}
+
 		return nil
+	})
+
+	// 处理错误
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
 	}
-	return nil
+
+	// 返回成功响应
+c.JSON(http.StatusOK, gin.H{
+	"success": true,
+	"message": "商户域名和端口更新成功",
+	"data": gin.H{
+		"merchantId":     merchantId,
+		"domain":         domain,
+		"port":           port,
+		"protocol":       protocol,
+		"filesProcessed": filesProcessed,
+	},
+})
+}
+
+// 获取文件内容
+type FileContentResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Data    struct {
+		FileName string `json:"fileName"`
+		FilePath string `json:"filePath"`
+		Size     int64  `json:"size"`
+		Content  string `json:"content"`
+	} `json:"data"`
+	Error string `json:"error,omitempty"`
+}
+
+func getFileContent(c *gin.Context) {
+	// 获取商户ID
+	merchantId := c.Param("merchantId")
+	if merchantId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "商户ID不能为空",
+		})
+		return
+	}
+
+	// 获取文件路径参数
+	filePath := c.Query("path")
+	if filePath == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "文件路径不能为空",
+		})
+		return
+	}
+
+	// 调试日志
+	fmt.Printf("[DEBUG] Raw path: %s\n", filePath)
+
+	// 解码URL编码的文件路径
+	// 注意：前端对路径进行了两次encodeURIComponent编码，所以需要解码两次
+	firstDecodedPath, err := url.QueryUnescape(filePath)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "文件路径第一次解码失败",
+		})
+		return
+	}
+	
+	fmt.Printf("[DEBUG] First decoded path: %s\n", firstDecodedPath)
+	
+	// 第二次解码
+	decodedPath, err := url.QueryUnescape(firstDecodedPath)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "文件路径第二次解码失败",
+		})
+		return
+	}
+	
+	fmt.Printf("[DEBUG] Final decoded path: %s\n", decodedPath)
+
+	// 为了安全起见，检查path是否包含了商户ID对应的目录
+	// 这是因为从日志中看到path格式是：www/merchant_1000/data/domains.json
+	expectedMerchantDir := "merchant_" + merchantId
+	if !strings.Contains(decodedPath, expectedMerchantDir) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "文件路径必须包含有效的商户目录",
+		})
+		return
+	}
+
+	// 构建完整的文件路径
+	// 注意：处理路径前缀问题 - decodedPath可能已经包含了www/前缀
+	var fullFilePath string
+	// 检查decodedPath是否已经以www/开头
+	if strings.HasPrefix(decodedPath, "www/") {
+		// 如果路径已经以www/开头，直接使用相对路径
+		fullFilePath = decodedPath
+	} else {
+		// 否则添加基础目录前缀
+		fullFilePath = filepath.Join(baseUploadDir, decodedPath)
+	}
+
+	// 安全检查：确保文件位于基础上传目录内，防止目录遍历攻击
+	absFilePath, err := filepath.Abs(fullFilePath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "获取文件绝对路径失败",
+		})
+		return
+	}
+
+	absBaseUploadDir, err := filepath.Abs(baseUploadDir)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "获取基础上传目录绝对路径失败",
+		})
+		return
+	}
+
+	// 检查文件是否在基础上传目录内
+	if !strings.HasPrefix(absFilePath, absBaseUploadDir) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "不允许访问上传目录外的文件",
+		})
+		return
+	}
+
+	// 检查文件是否存在
+	fmt.Printf("[DEBUG] Full file path: %s\n", fullFilePath)
+	fileInfo, err := os.Stat(fullFilePath)
+	if os.IsNotExist(err) {
+		fmt.Printf("[DEBUG] File does not exist: %s\n", fullFilePath)
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "文件不存在",
+		})
+		return
+	} else if err != nil {
+		fmt.Printf("[DEBUG] Error checking file: %s, %v\n", fullFilePath, err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "检查文件失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 检查是否是文件（不是目录）
+	if fileInfo.IsDir() {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "请求的路径不是文件",
+		})
+		return
+	}
+
+	// 读取文件内容
+	content, err := os.ReadFile(fullFilePath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "读取文件失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 返回成功响应
+	var response FileContentResponse
+	response.Success = true
+	response.Message = "获取文件内容成功"
+	response.Data.FileName = fileInfo.Name()
+	response.Data.FilePath = decodedPath
+	response.Data.Size = fileInfo.Size()
+	response.Data.Content = string(content)
+
+	c.JSON(http.StatusOK, response)
 }

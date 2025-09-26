@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>商户管理系统</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>商户管理系统</h1>
+        
+        <!-- 导航菜单 -->
+        <div class="nav">
+            <button id="btnListMerchants" class="nav-btn active">商户列表</button>
+            <button id="btnCreateMerchant" class="nav-btn">创建商户</button>
+            <button id="btnUpdateDomainPort" class="nav-btn">更新域名端口</button>
+        </div>
+        
+        <!-- 内容区域 -->
+        <div class="content">
+            <!-- 商户列表 -->
+            <div id="merchantList" class="panel active">
+                <h2>商户列表</h2>
+                <div class="search-container">
+                    <input type="text" id="searchMerchant" placeholder="搜索商户ID...">
+                    <button id="btnSearchMerchant">搜索</button>
+                </div>
+                <div id="merchantsTableContainer" class="table-container">
+                    <table id="merchantsTable">
+                        <thead>
+                            <tr>
+                                <th>商户ID</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="merchantsTableBody">
+                            <!-- 商户列表将通过JavaScript动态加载 -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="merchantListLoading" class="loading">加载中...</div>
+                <div id="merchantListError" class="error hidden">加载商户列表失败</div>
+            </div>
+            
+            <!-- 创建商户 -->
+            <div id="createMerchant" class="panel">
+                <h2>创建商户</h2>
+                <form id="createMerchantForm">
+                    <div class="form-group">
+                        <label for="merchantId">商户ID</label>
+                        <input type="text" id="merchantId" placeholder="请输入商户ID" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="domain">域名</label>
+                        <input type="text" id="domain" placeholder="请输入域名" value="localhost">
+                    </div>
+                    <div class="form-group">
+                        <label for="port">端口</label>
+                        <input type="text" id="port" placeholder="请输入端口" value="8080">
+                    </div>
+                    <div class="form-group">
+                        <label for="protocol">协议</label>
+                        <select id="protocol">
+                            <option value="https" selected>HTTPS</option>
+                            <option value="http">HTTP</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn-primary">创建商户</button>
+                </form>
+                <div id="createMerchantResult" class="result hidden"></div>
+            </div>
+            
+            <!-- 更新域名端口 -->
+            <div id="updateDomainPort" class="panel">
+                <h2>更新商户域名和端口</h2>
+                <form id="updateDomainPortForm">
+                    <div class="form-group">
+                        <label for="updateMerchantId">商户ID</label>
+                        <input type="text" id="updateMerchantId" placeholder="请输入商户ID" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="updateDomain">新域名</label>
+                        <input type="text" id="updateDomain" placeholder="请输入新域名" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="updatePort">新端口</label>
+                        <input type="text" id="updatePort" placeholder="请输入新端口" required>
+                    </div>
+                    <button type="submit" class="btn-primary">更新</button>
+                </form>
+                <div id="updateDomainPortResult" class="result hidden"></div>
+            </div>
+            
+            <!-- 商户文件列表 -->
+            <div id="merchantFiles" class="panel">
+                <h2>商户文件列表 <span id="currentMerchantId"></span></h2>
+                <button id="btnBackToList" class="btn-secondary">返回商户列表</button>
+                <div id="merchantFilesTableContainer" class="table-container">
+                    <table id="merchantFilesTable">
+                        <thead>
+                            <tr>
+                                <th>文件路径</th>
+                                <th>文件大小</th>
+                                <th>修改时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="merchantFilesTableBody">
+                            <!-- 文件列表将通过JavaScript动态加载 -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="merchantFilesLoading" class="loading">加载中...</div>
+                <div id="merchantFilesError" class="error hidden">加载文件列表失败</div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
