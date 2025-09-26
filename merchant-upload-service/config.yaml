@@ -1,0 +1,22 @@
+# 应用总配置（对应 AppConfig 结构体）
+server:
+  # 服务器配置（对应 ServerConfig 结构体）
+  host: localhost          # 服务监听地址，默认值：localhost
+  port: 8080               # 服务监听端口，默认值：8080
+  read_timeout: 30s        # 读取请求超时时间，默认值：30s（支持 time.Duration 格式，如 1m/500ms）
+  write_timeout: 30s       # 响应写入超时时间，默认值：30s
+
+database:
+  # 数据库基础配置（对应 DBConfig 结构体）
+  dialect: mysql           # 数据库方言（如 mysql/postgres/sqlite，需根据实际使用的数据库填写）
+  host: localhost          # 数据库地址（默认本地，远程数据库填写 IP 或域名）
+  port: 3306               # 数据库端口（mysql 默认 3306，postgres 默认 5432）
+  username: root           # 数据库用户名（默认 root，生产环境建议使用非 root 账号）
+  password: "123456"       # 数据库密码（含特殊字符时建议加引号，生产环境需使用强密码）
+  database: demo_db        # 数据库名称（应用对应的数据库实例名）
+
+  # 数据库连接池配置（对应 DBConfig 结构体的连接池字段）
+  max_open_conns: 25       # 最大打开连接数，默认值：25（控制同时与数据库建立的最大连接数）
+  max_idle_conns: 10       # 最大空闲连接数，默认值：10（连接池保留的空闲连接数，避免频繁创建连接）
+  conn_max_lifetime: 1h    # 连接最大存活时间，默认值：1h（连接使用超过此时长后会被关闭重建）
+  conn_max_idle_time: 30m  # 连接最大空闲时间，默认值：30m（空闲连接超过此时长后会被清理）

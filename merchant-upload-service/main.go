@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -100,7 +99,7 @@ func uploadFile(c *gin.Context) {
 		return
 	}
 
-	// 创建商户下的html、config、static三个目录
+	// 创建商户下的html、config、static、data三个目录
 	subdirs := []string{"html", "config", "static", "data"}
 	for _, subdir := range subdirs {
 		subdirPath := filepath.Join(merchantDir, subdir)
@@ -176,69 +175,6 @@ func isAllowedFileType(contentType string) bool {
 	}
 	return false
 }
-
-//// 列出所有商户及其文件（已废弃）
-//func listMerchantsAndFiles(c *gin.Context) {
-//	// 读取基础目录
-//	entries, err := os.ReadDir(baseUploadDir)
-//	if err != nil {
-//		c.JSON(http.StatusInternalServerError, gin.H{
-//			"success": false,
-//			"error":   "读取目录失败: " + err.Error(),
-//		})
-//		return
-//	}
-//
-//	// 准备响应数据
-//	merchants := []gin.H{}
-//
-//	// 遍历所有目录，找出商户目录
-//	for _, entry := range entries {
-//		if entry.IsDir() && strings.HasPrefix(entry.Name(), "merchant") {
-//			merchantDir := filepath.Join(baseUploadDir, entry.Name())
-//			merchantId := strings.TrimPrefix(entry.Name(), "merchant")
-//
-//			// 读取商户目录中的文件
-//			files, err := os.ReadDir(merchantDir)
-//			if err != nil {
-//				c.JSON(http.StatusInternalServerError, gin.H{
-//					"success": false,
-//					"error":   "读取商户目录失败: " + err.Error(),
-//				})
-//				return
-//			}
-//
-//			// 准备文件列表
-//			fileList := []gin.H{}
-//			for _, file := range files {
-//				if !file.IsDir() {
-//					fileInfo, _ := file.Info()
-//					fileList = append(fileList, gin.H{
-//						"name": file.Name(),
-//						"size": fileInfo.Size(),
-//						"url":  "/" + entry.Name() + "/" + file.Name(),
-//					})
-//				}
-//			}
-//
-//			// 添加商户信息到响应
-//			merchants = append(merchants, gin.H{
-//				"merchantId": merchantId,
-//				"directory":  entry.Name(),
-//				"files":      fileList,
-//				"fileCount":  len(fileList),
-//			})
-//		}
-//	}
-//
-//	// 返回成功响应
-//	c.JSON(http.StatusOK, gin.H{
-//		"success":  true,
-//		"message":  "获取商户列表成功",
-//		"data":     merchants,
-//		"total":    len(merchants),
-//	})
-//}
 
 // 列出所有商户
 func listMerchants(c *gin.Context) {
@@ -470,8 +406,6 @@ func createMerchant(c *gin.Context) {
 				newContent = strings.ReplaceAll(newContent, "8080", port)
 				// 替换http为https
 				newContent = strings.ReplaceAll(newContent, "http://", protocol+":/")
-				// 替换硬编码的IP地址
-				newContent = strings.ReplaceAll(newContent, "16.163.193.74", domain)
 
 				// 写入新文件
 				if err := os.WriteFile(destPath, []byte(newContent), 0644); err != nil {
@@ -549,7 +483,7 @@ func getMerchantDomains(c *gin.Context) {
 	}
 
 	// 读取文件内容
-	content, err := ioutil.ReadFile(domainsFilePath)
+	content, err := os.ReadFile(domainsFilePath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -717,7 +651,7 @@ func uploadMerchantDomains(c *gin.Context) {
 	}
 
 	// 验证JSON文件格式
-	content, err := ioutil.ReadFile(domainsFilePath)
+	content, err := os.ReadFile(domainsFilePath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
